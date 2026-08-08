@@ -107,11 +107,63 @@ function navActive(r){document.querySelectorAll('.bottom-nav button').forEach(b=
 function go(r,param){if(route==='surah'&&r!=='surah')stopAudio();if(DETAIL_ROUTES.includes(r)&&!DETAIL_ROUTES.includes(route))detailOrigin={route,param:curParam};route=r;curParam=param;if(MAIN_ROUTES.includes(r))navActive(r);render(r,param);window.scrollTo({top:0,behavior:'smooth'})}
 function detailBack(){if(detailOrigin)go(detailOrigin.route,detailOrigin.param);else go('overview')}
 function seq(plan){return `<div class="sequence">${plan.sureler.map((id,i)=>`<button class="surah-card" onclick="go('surah','${id}')"><small>${i+1}. rekât</small>${sName(id)}</button>${i<plan.sureler.length-1?'<span class="arrow">→</span>':''}`).join('')}</div>`}
-function cardLabel(id){const c=state.cards[id];if(!c)return '🆕 Yeni';if(c.box>=6)return '🏆 Ustalaştı';if(c.due<=today())return '⏰ Bugün tekrar';return `📦 Kutu ${c.box} · ${fmtDate(c.due)}`}
-function bolumInfoCard(p){return `<section class="bolum-card"><div class="section-title"><h2>${p.icon} ${p.bolum}</h2><span class="badge">${cardLabel(p.id)}</span></div>${seq(p)}</section>`}
-function renderHome(){const vakitler=[...new Map(D.plans.map(p=>[p.vakit,p])).values()];const dueN=studyDueCount();app.innerHTML=`<section class="card hero"><h2>🔥 ${state.streak.count} günlük seri</h2><p>${dueN?`Bugün ${dueN} bölüm çalışmanı bekliyor.`:'Bugün için planlanan tekrar yok, harikasın!'}</p><button class="btn secondary" style="margin-top:10px" onclick="go('study')">${dueN?'▶ Çalış':'🔁 Serbest pratik'}</button></section><div class="grid">${vakitler.map(v=>`<button class="prayer-card" onclick="go('prayer','${v.vakit}')"><span>${v.icon}</span><strong>${v.vakit}</strong><span class="muted">${D.plans.filter(p=>p.vakit===v.vakit).length} bölüm</span></button>`).join('')}</div>`}
-function renderPrayer(vakit){const list=D.plans.filter(p=>p.vakit===vakit);app.innerHTML=`<button class="btn ghost" onclick="go('home')">← Ana sayfa</button><div class="section-title"><h2>${list[0].icon} ${vakit}</h2></div>${list.map(bolumInfoCard).join('')}`}
-function renderOverview(){app.innerHTML=`<section class="card"><div class="section-title"><h2>Hızlı Bakış</h2><span class="badge">Tüm vakitler</span></div><table><thead><tr><th>Vakit / bölüm</th><th>Sûre sırası</th></tr></thead><tbody>${D.plans.map(p=>`<tr><td><b>${p.icon} ${p.vakit}</b><br><span class="muted">${p.bolum}</span><br><span class="badge">${cardLabel(p.id)}</span></td><td>${p.sureler.map((x,i)=>`<button class="surah-card" style="min-width:auto;padding:7px 9px;margin:2px" onclick="go('surah','${x}')">${i+1}. ${sName(x)}</button>`).join(' ')}</td></tr>`).join('')}</tbody></table></section>`}
+
+/* ---- Zincirler ----
+   Sıra sıra ezberlemek yerine tek bir bütün olarak öğrenmek için, bölümleri
+   üç kademeye topluyoruz:
+   0) Kısa Sûreler Sırası — uygulamada geçen 11 farklı sûrenin kendi
+      aralarındaki doğal (Kur'an) sırası, tek zincir.
+   1) Vakit zincirleri — bir vaktin bütün rekâtlarındaki sûreler uç uca
+      eklenmiş tek zincir (ör. Öğle: İlk Sünnet+Farz+Son Sünnet birlikte).
+   2) Günün Tam Sırası — bütün vakitlerin zincirleri uç uca eklenmiş, günün
+      baştan sona tek büyük sırası. Yalnızca 1. kademedeki 6 zincir yeterince
+      pekiştirilince açılır. */
+function buildChains(){
+ const vakitOrder=[...new Map(D.plans.map(p=>[p.vakit,p])).keys()];
+ const tier1=vakitOrder.map(v=>{
+  const parts=D.plans.filter(p=>p.vakit===v);
+  return {id:'v_'+v,title:v,icon:parts[0].icon,tier:1,
+   items:parts.flatMap(p=>p.sureler.map(id=>({id,group:p.bolum})))};
+ });
+ const master={id:'master',title:'Kısa Sûreler Sırası',icon:'📖',tier:0,
+  items:Object.entries(D.surahs).sort((a,b)=>a[1].number-b[1].number).map(([id])=>({id,group:null}))};
+ const gun={id:'gun',title:'Günün Tam Sırası',icon:'🌐',tier:2,
+  items:tier1.flatMap(c=>c.items.map(it=>({id:it.id,group:`${c.title} · ${it.group}`})))};
+ return [master,...tier1,gun];
+}
+const CHAINS=buildChains();
+function chainById(id){return CHAINS.find(c=>c.id===id)}
+function chainLocked(chain){
+ if(chain.tier===0)return false;
+ if(chain.tier===1)return !(state.cards.master&&state.cards.master.box>=1);
+ return !CHAINS.filter(c=>c.tier===1).every(c=>state.cards[c.id]&&state.cards[c.id].box>=2);
+}
+function cardLabel(chain){
+ if(chainLocked(chain))return '🔒 Kilitli';
+ const c=state.cards[chain.id];
+ if(!c)return '🆕 Yeni';
+ if(c.box>=6)return '🏆 Ustalaştı';
+ if(c.due<=today())return '⏰ Bugün tekrar';
+ return `📦 Kutu ${c.box} · ${fmtDate(c.due)}`;
+}
+function renderHome(){
+ const vakitler=[...new Map(D.plans.map(p=>[p.vakit,p])).values()];
+ const dueN=studyDueCount();
+ app.innerHTML=`<section class="card hero"><h2>🔥 ${state.streak.count} günlük seri</h2><p>${dueN?`Bugün ${dueN} zincir çalışmanı bekliyor.`:'Bugün için planlanan tekrar yok, harikasın!'}</p><button class="btn secondary" style="margin-top:10px" onclick="go('study')">${dueN?'▶ Çalış':'🔁 Serbest pratik'}</button></section><div class="grid">${vakitler.map(v=>`<button class="prayer-card" onclick="go('prayer','${v.vakit}')"><span>${v.icon}</span><strong>${v.vakit}</strong><span class="muted">${D.plans.filter(p=>p.vakit===v.vakit).length} bölüm</span></button>`).join('')}</div>`;
+}
+function renderPrayer(vakit){
+ const chain=chainById('v_'+vakit);
+ const parts=D.plans.filter(p=>p.vakit===vakit);
+ app.innerHTML=`<button class="btn ghost" onclick="go('home')">← Ana sayfa</button>
+ <div class="section-title"><h2>${parts[0].icon} ${vakit}</h2><span class="badge">${cardLabel(chain)}</span></div>
+ <p class="muted">Bu vaktin bütün rekâtlarındaki sûreler, Çalış sekmesinde tek zincir olarak pekiştirilir. Aşağıda bölüm bölüm okuyabilirsin.</p>
+ ${parts.map(p=>`<section class="card"><h3 class="muted" style="margin:0 0 8px">${p.bolum}</h3>${seq(p)}</section>`).join('')}`;
+}
+function renderOverview(){
+ const chainRows=CHAINS.map(c=>`<div class="section-title"><span class="muted">${c.icon} ${c.title}${c.tier?` (${c.items.length} adım)`:''}</span><span class="badge">${cardLabel(c)}</span></div>`).join('');
+ app.innerHTML=`<section class="card"><div class="section-title"><h2>Zincir durumu</h2></div>${chainRows}</section>
+ <section class="card"><div class="section-title"><h2>Ayrıntılı sıra</h2><span class="badge">Tüm vakitler</span></div><table><thead><tr><th>Vakit / bölüm</th><th>Sûre sırası</th></tr></thead><tbody>${D.plans.map(p=>`<tr><td><b>${p.icon} ${p.vakit}</b><br><span class="muted">${p.bolum}</span></td><td>${p.sureler.map((x,i)=>`<button class="surah-card" style="min-width:auto;padding:7px 9px;margin:2px" onclick="go('surah','${x}')">${i+1}. ${sName(x)}</button>`).join(' ')}</td></tr>`).join('')}</tbody></table></section>`;
+}
 function renderSurah(id){
  const s=D.surahs[id]; stopAudio(false);
  app.innerHTML=`<button class="btn ghost" onclick="detailBack()">← Geri</button>
@@ -171,17 +223,18 @@ function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Mat
 function xpToLevel(xp){return {level:1+Math.floor(xp/100),inLevel:xp%100}}
 
 /* ---- Aralıklı tekrar (Leitner kutu) motoru ----
-   Kutu 0-6, her kutunun bir bekleme süresi var. Bir bölümü hatasız
+   Kutu 0-6, her kutunun bir bekleme süresi var. Bir zinciri hatasız
    tamamlarsan bir üst kutuya çıkar ve tekrar tarihi uzar; hata yaparsan
-   bir alt kutuya iner ve yakında tekrar karşına çıkar. Yeni bölümler
-   güne 3 adetle sınırlı tanıtılır, aşırı yüklenmeyi önlemek için. */
+   bir alt kutuya iner ve yakında tekrar karşına çıkar. Yeni zincirler
+   güne 2 adetle sınırlı tanıtılır, aşırı yüklenmeyi önlemek için. */
 const BOX_INTERVALS=[0,1,2,4,7,14,30];
-const DAILY_NEW_LIMIT=3;
+const DAILY_NEW_LIMIT=2;
 function today(){return new Date().toISOString().slice(0,10)}
 function daysFromNow(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)}
 function fmtDate(iso){const d=new Date(iso+'T00:00:00');return d.toLocaleDateString('tr-TR',{day:'numeric',month:'short'})}
-function newList(){return D.plans.filter(p=>!state.cards[p.id])}
-function dueList(){return D.plans.filter(p=>{const c=state.cards[p.id];return c&&c.due<=today()})}
+function availableChains(){return CHAINS.filter(c=>!chainLocked(c))}
+function newList(){return availableChains().filter(c=>!state.cards[c.id])}
+function dueList(){return availableChains().filter(c=>{const cd=state.cards[c.id];return cd&&cd.due<=today()})}
 function newQuotaLeft(){return Math.max(0,DAILY_NEW_LIMIT-(state.newToday.date===today()?state.newToday.count:0))}
 function studyDueCount(){return dueList().length+Math.min(newQuotaLeft(),newList().length)}
 function introduceToday(){
@@ -189,16 +242,16 @@ function introduceToday(){
  const room=newQuotaLeft();
  if(room<=0)return[];
  const fresh=newList().slice(0,room);
- fresh.forEach(p=>{state.cards[p.id]={box:0,due:today(),lapses:0}});
+ fresh.forEach(c=>{state.cards[c.id]={box:0,due:today(),lapses:0}});
  state.newToday.count+=fresh.length;
  return fresh;
 }
 function buildQueue(){
  const fresh=introduceToday();
- const freshIds=new Set(fresh.map(p=>p.id));
+ const freshIds=new Set(fresh.map(c=>c.id));
  const due=dueList();
  Store.set(state);
- const tasks=due.map(p=>({p,stage:freshIds.has(p.id)?'A':(state.cards[p.id].box<=2?'B':'C')}));
+ const tasks=due.map(c=>({chain:c,stage:freshIds.has(c.id)?'A':(state.cards[c.id].box<=2?'B':'C')}));
  return shuffle(tasks);
 }
 function updateStreak(){
@@ -211,22 +264,25 @@ function updateStreak(){
 function beginStudySession(practiceMode){
  let tasks;
  if(practiceMode){
-  const introduced=D.plans.filter(p=>state.cards[p.id]);
-  tasks=shuffle(introduced.map(p=>({p,stage:state.cards[p.id].box<=2?'B':'C'})));
+  const introduced=availableChains().filter(c=>state.cards[c.id]);
+  tasks=shuffle(introduced.map(c=>({chain:c,stage:state.cards[c.id].box<=2?'B':'C'})));
  }else{
   tasks=buildQueue();
  }
  studySession={queue:tasks,idx:0,promoted:0,demoted:0,xp:0,practice:practiceMode};
  renderStudy();
 }
+function chainListHtml(){
+ return CHAINS.map(c=>`<div class="section-title"><span class="muted">${c.icon} ${c.title}</span><span class="badge">${cardLabel(c)}</span></div>`).join('');
+}
 function renderStudy(){
  if(!studySession){
   const dueN=dueList().length,newN=Math.min(newQuotaLeft(),newList().length),total=dueN+newN;
-  const anyIntroduced=D.plans.some(p=>state.cards[p.id]);
+  const anyIntroduced=availableChains().some(c=>state.cards[c.id]);
   app.innerHTML=`<section class="card hero"><h2>🔥 ${state.streak.count} günlük seri</h2>
-  <p>${total?`Bugün ${total} bölüm seni bekliyor: ${newN} yeni, ${dueN} tekrar.`:'Bugün için planlanan tekrar yok. Harika gidiyorsun! 🎉'}</p></section>
-  <section class="card">${total?`<button class="play-btn" onclick="beginStudySession(false)">▶ Bugün Çalış (${total})</button>`:anyIntroduced?`<button class="play-btn" onclick="beginStudySession(true)">🔁 Serbest pratik yap</button>`:`<p class="muted">Başlamak için Bugün Çalış'a bas, ilk bölümler tanıtılsın.</p><button class="play-btn" onclick="beginStudySession(false)">▶ Başla</button>`}</section>
-  <section class="card"><h2>Bölümler</h2>${D.plans.map(p=>`<div class="section-title"><span class="muted">${p.icon} ${p.bolum}</span><span class="badge">${cardLabel(p.id)}</span></div>`).join('')}</section>`;
+  <p>${total?`Bugün ${total} zincir seni bekliyor: ${newN} yeni, ${dueN} tekrar.`:'Bugün için planlanan tekrar yok. Harika gidiyorsun! 🎉'}</p></section>
+  <section class="card">${total?`<button class="play-btn" onclick="beginStudySession(false)">▶ Bugün Çalış (${total})</button>`:anyIntroduced?`<button class="play-btn" onclick="beginStudySession(true)">🔁 Serbest pratik yap</button>`:`<p class="muted">Başlamak için Bugün Çalış'a bas, önce Kısa Sûreler Sırası tanıtılsın.</p><button class="play-btn" onclick="beginStudySession(false)">▶ Başla</button>`}</section>
+  <section class="card"><h2>Zincirler</h2><p class="muted">Önce kısa sûrelerin doğal sırası, sonra her vaktin kendi zinciri, en son hepsi birleşip günün tam sırası olur.</p>${chainListHtml()}</section>`;
   return;
  }
  if(studySession.idx>=studySession.queue.length){renderStudySummary();return}
@@ -234,45 +290,51 @@ function renderStudy(){
  if(task.stage==='A')renderStageA(task);else renderDrill(task);
 }
 function renderStageA(task){
- const p=task.p;
+ const c=task.chain;
+ let lastGroup=undefined,html='<div class="slot-row">';
+ c.items.forEach((it,i)=>{
+  if(it.group!==lastGroup){if(i>0)html+='</div>';if(it.group)html+=`<p class="muted" style="margin:14px 0 4px;font-weight:800;width:100%">${it.group}</p>`;html+='<div class="slot-row">';lastGroup=it.group;}
+  html+=`<div class="slot filled"><small>${i+1}</small>${sName(it.id)}</div>`;
+ });
+ html+='</div>';
  app.innerHTML=`<section class="card">
- <span class="badge">🆕 Yeni bölüm · ${studySession.idx+1}/${studySession.queue.length}</span>
- <h2 class="surah-title">${p.icon} ${p.bolum}</h2>
- <p class="muted">${p.vakit} vaktinde bu bölümde okunan sûre sırası budur. Birkaç kez oku, sonra hemen deneyeceksin:</p>
- <div class="slot-row">${p.sureler.map((id,i)=>`<div class="slot filled"><small>${i+1}. rekât</small>${sName(id)}</div>`).join('')}</div>
+ <span class="badge">🆕 Yeni zincir · ${studySession.idx+1}/${studySession.queue.length}</span>
+ <h2 class="surah-title">${c.icon} ${c.title}</h2>
+ <p class="muted">${c.items.length} adımlık bu sırayı birkaç kez oku, sonra hemen deneyeceksin:</p>
+ ${html}
  <button class="btn" onclick="advanceStudy()">Hazırım, sırala →</button>
  </section>`;
 }
 function advanceStudy(){studySession.queue[studySession.idx].stage='B';drill=null;renderStudy()}
 function poolFor(task){
+ const targetIds=task.chain.items.map(it=>it.id);
  if(task.stage==='C'){
-  const target=task.p.sureler;
-  const allIds=[...new Set(D.plans.flatMap(pp=>pp.sureler))];
-  const distractors=shuffle(allIds.filter(id=>!target.includes(id))).slice(0,Math.max(0,6-target.length));
-  return shuffle([...target,...distractors]);
+  const universe=chainById('master').items.map(it=>it.id);
+  const distractors=shuffle(universe.filter(id=>!targetIds.includes(id))).slice(0,4);
+  return shuffle([...targetIds,...distractors]);
  }
- return shuffle(task.p.sureler);
+ return shuffle(targetIds);
 }
 function renderDrill(task){
- if(!drill||drill.taskP!==task.p.id||drill.stage!==task.stage)drill={taskP:task.p.id,stage:task.stage,pool:poolFor(task),placed:[],mistakes:0,lives:3};
- const p=task.p;
+ if(!drill||drill.taskId!==task.chain.id||drill.stage!==task.stage)drill={taskId:task.chain.id,stage:task.stage,pool:poolFor(task),placedIdx:[],mistakes:0,lives:3};
+ const c=task.chain,expectedIds=c.items.map(it=>it.id);
  app.innerHTML=`<section class="card">
  <div class="game-top"><span class="badge">${task.stage==='C'?'🧠 Hatırla':'🧩 Diz'} · ${studySession.idx+1}/${studySession.queue.length}</span><span class="lives">${'❤️'.repeat(drill.lives)}${'🤍'.repeat(3-drill.lives)}</span></div>
- <h2 class="surah-title">${p.icon} ${p.bolum}</h2>
- <p class="muted">${task.stage==='C'?'Bu bölümde okunan sûreleri, aralarına karışan başka sûrelerden ayırarak doğru sırayla seç.':'Sûreleri doğru sırayla tıkla.'}</p>
- <div class="slot-row">${p.sureler.map((id,i)=>`<div class="slot ${i<drill.placed.length?'filled':''}"><small>${i+1}. rekât</small>${i<drill.placed.length?sName(drill.placed[i]):'?'}</div>`).join('')}</div>
- <div class="chip-tray">${drill.pool.map((id,i)=>`<button class="chip ${drill.placed.includes(id)?'placed':''}" id="dchip${i}" onclick="pickDrillChip(${i})">${sName(id)}</button>`).join('')}</div>
+ <h2 class="surah-title">${c.icon} ${c.title}</h2>
+ <p class="muted">${task.stage==='C'?'Doğru sûreleri, aralarına karışan başkalarından ayırarak sırayla seç.':'Sûreleri baştan sona doğru sırayla tıkla.'}</p>
+ <div class="slot-row">${expectedIds.map((id,i)=>`<div class="slot ${i<drill.placedIdx.length?'filled':''}"><small>${i+1}</small>${i<drill.placedIdx.length?sName(drill.pool[drill.placedIdx[i]]):'?'}</div>`).join('')}</div>
+ <div class="chip-tray">${drill.pool.map((id,i)=>`<button class="chip ${drill.placedIdx.includes(i)?'placed':''}" id="dchip${i}" onclick="pickDrillChip(${i})">${sName(id)}</button>`).join('')}</div>
  </section>`;
 }
 function pickDrillChip(i){
  if(!drill)return;
  const task=studySession.queue[studySession.idx];
- const id=drill.pool[i];
- if(drill.placed.includes(id))return;
- const expected=task.p.sureler[drill.placed.length];
- if(id===expected){
-  drill.placed.push(id);
-  if(drill.placed.length===task.p.sureler.length){finishDrill(task);return}
+ if(drill.placedIdx.includes(i))return;
+ const expectedIds=task.chain.items.map(it=>it.id);
+ const expected=expectedIds[drill.placedIdx.length];
+ if(drill.pool[i]===expected){
+  drill.placedIdx.push(i);
+  if(drill.placedIdx.length===expectedIds.length){finishDrill(task);return}
   renderDrill(task);
  }else{
   drill.mistakes++;drill.lives--;
@@ -283,25 +345,25 @@ function pickDrillChip(i){
  }
 }
 function finishDrill(task,failed){
- const p=task.p,success=!failed&&drill.mistakes===0;
+ const c=task.chain,success=!failed&&drill.mistakes===0;
  if(!studySession.practice){
-  const c=state.cards[p.id]||(state.cards[p.id]={box:0,due:today(),lapses:0});
-  if(success){c.box=Math.min(c.box+1,BOX_INTERVALS.length-1);studySession.promoted++}
-  else{c.box=Math.max(c.box-1,0);c.lapses++;studySession.demoted++}
-  c.due=daysFromNow(BOX_INTERVALS[c.box]);
+  const cd=state.cards[c.id]||(state.cards[c.id]={box:0,due:today(),lapses:0});
+  if(success){cd.box=Math.min(cd.box+1,BOX_INTERVALS.length-1);studySession.promoted++}
+  else{cd.box=Math.max(cd.box-1,0);cd.lapses++;studySession.demoted++}
+  cd.due=daysFromNow(BOX_INTERVALS[cd.box]);
  }
- const gained=success?10+p.sureler.length*4:4;
+ const gained=success?10+c.items.length*3:4+c.items.length;
  state.xp+=gained;studySession.xp+=gained;
  Store.set(state);
  drill=null;studySession.idx++;
- renderStudyStepResult(p,success,gained,failed);
+ renderStudyStepResult(c,success,gained,failed);
 }
-function renderStudyStepResult(p,success,gained,failed){
- const c=state.cards[p.id];
+function renderStudyStepResult(c,success,gained,failed){
+ const cd=state.cards[c.id];
  app.innerHTML=`<section class="card result-panel">
  <h2>${failed?'😵 Bu sefer olmadı':success?'✅ Harika!':'🙂 Tekrar gerekecek'}</h2>
- <p class="muted">${p.icon} ${p.bolum}</p>
- ${!studySession.practice&&c?`<p>Kutu <b>${c.box}</b>/6 · Sıradaki tekrar: <b>${fmtDate(c.due)}</b></p>`:''}
+ <p class="muted">${c.icon} ${c.title}</p>
+ ${!studySession.practice&&cd?`<p>Kutu <b>${cd.box}</b>/6 · Sıradaki tekrar: <b>${fmtDate(cd.due)}</b></p>`:''}
  <p class="muted">+${gained} XP</p>
  <button class="btn" onclick="renderStudy()">Devam et →</button>
  </section>`;
@@ -311,14 +373,15 @@ function renderStudySummary(){
  const {level}=xpToLevel(state.xp),{queue,promoted,xp,practice}=studySession;
  app.innerHTML=`<section class="card result-panel">
  <h2>Bugünkü çalışma bitti 🎉</h2>
- <div class="result-stat"><div><b>${queue.length}</b>bölüm</div><div><b>${practice?'—':promoted}</b>ilerledi</div><div><b>+${xp}</b>XP</div></div>
+ <div class="result-stat"><div><b>${queue.length}</b>zincir</div><div><b>${practice?'—':promoted}</b>ilerledi</div><div><b>+${xp}</b>XP</div></div>
  <p class="muted">Seviye ${level} · 🔥 ${state.streak.count} günlük seri</p>
  <button class="btn" onclick="studySession=null;go('study')">Bitir</button>
  </section>`;
  studySession=null;
 }
 function renderProgress(){
- const cards=Object.values(state.cards);
+ const total=CHAINS.length;
+ const cards=CHAINS.map(c=>state.cards[c.id]).filter(Boolean);
  const mastered=cards.filter(c=>c.box>=6).length;
  const dueN=dueList().length;
  const boxCounts=[0,1,2,3,4,5,6].map(b=>cards.filter(c=>c.box===b).length);
@@ -327,9 +390,10 @@ function renderProgress(){
  <div class="section-title"><h2>İlerleme</h2><span class="level-pill">Seviye ${level}</span></div>
  <div class="xp-row"><div class="progress"><span style="width:${inLevel}%"></span></div><span class="muted">${inLevel}/100 XP</span></div>
  </section>
- <section class="card"><h2>${cards.length}/${D.plans.length} bölüm tanıtıldı</h2><div class="progress"><span style="width:${D.plans.length?Math.round(cards.length/D.plans.length*100):0}%"></span></div><p class="muted">🏆 ${mastered} bölüm ustalaştı · ⏰ ${dueN} bölüm bugün tekrar bekliyor</p></section>
- <section class="card"><h2>Kutu dağılımı</h2><p class="muted">Aralıklı tekrar sistemi: hatasız tamamladıkça kutu yükselir, tekrar süresi uzar.</p>${boxCounts.map((n,b)=>`<div class="section-title"><span class="muted">📦 Kutu ${b}${b===6?' (ustalaştı)':''}</span><span class="badge">${n}</span></div>`).join('')}</section>
- <section class="card"><h2>🔥 ${state.streak.count} günlük seri</h2><p class="muted">Her gün en az bir bölüm çalışarak seriyi canlı tut.</p></section>
+ <section class="card"><h2>${cards.length}/${total} zincir tanıtıldı</h2><div class="progress"><span style="width:${total?Math.round(cards.length/total*100):0}%"></span></div><p class="muted">🏆 ${mastered} zincir ustalaştı · ⏰ ${dueN} zincir bugün tekrar bekliyor</p></section>
+ <section class="card"><h2>Kutu dağılımı</h2><p class="muted">Hatasız tamamladıkça kutu yükselir, tekrar süresi uzar.</p>${boxCounts.map((n,b)=>`<div class="section-title"><span class="muted">📦 Kutu ${b}${b===6?' (ustalaştı)':''}</span><span class="badge">${n}</span></div>`).join('')}</section>
+ <section class="card"><h2>Zincirler</h2>${chainListHtml()}</section>
+ <section class="card"><h2>🔥 ${state.streak.count} günlük seri</h2><p class="muted">Her gün en az bir zincir çalışarak seriyi canlı tut.</p></section>
  <button class="btn ghost" onclick="resetAll()">Tüm ilerlemeyi sıfırla</button>`;
 }
 function resetAll(){if(confirm('Tüm öğrenme ilerlemesi silinsin mi?')){Store.reset();state=Store.get();studySession=null;drill=null;renderProgress()}}
