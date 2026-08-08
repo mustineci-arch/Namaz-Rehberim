@@ -269,6 +269,15 @@ function beginStudySession(practiceMode){
  }else{
   tasks=buildQueue();
  }
+ if(!tasks.length){
+  app.innerHTML=`<section class="card result-panel">
+  <h2>🤔 Şu an çalışılacak zincir yok</h2>
+  <p class="muted">Bu genelde eski bir tarayıcı durumundan kaynaklanır. İlerleme sekmesinden "Tüm ilerlemeyi sıfırla" ile temiz başlayabilirsin.</p>
+  <button class="btn" onclick="go('progress')">İlerlemeye git</button>
+  <button class="btn secondary" onclick="go('study')">Geri dön</button>
+  </section>`;
+  return;
+ }
  studySession={queue:tasks,idx:0,promoted:0,demoted:0,xp:0,practice:practiceMode};
  renderStudy();
 }
