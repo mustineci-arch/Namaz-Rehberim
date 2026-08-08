@@ -69,14 +69,15 @@
  reset(){localStorage.removeItem('nr_state')}
 };
 </script>
-  <script>const D=window.APP_DATA;let state=Store.get();let currentQuiz=null;let route='home';
+  <script>const D=window.APP_DATA;let state=Store.get();let currentQuiz=null;let route='home';let curParam=null;let surahOrigin=null;
 let audioState={audio:null,tracks:[],index:0,playing:false,surahId:null,rate:1};
 const AUDIO_BASE='https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/';
 
 const app=document.getElementById('app');
 function sName(id){return D.surahs[id]?.name||id}
 function navActive(r){document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.route===r))}
-function go(r,param){if(route==='surah'&&r!=='surah')stopAudio();route=r;navActive(['surah','prayer'].includes(r)?'home':r);render(r,param);window.scrollTo({top:0,behavior:'smooth'})}
+function go(r,param){if(route==='surah'&&r!=='surah')stopAudio();if(r==='surah'&&route!=='surah')surahOrigin={route,param:curParam};route=r;curParam=param;navActive(['surah','prayer'].includes(r)?'home':r);render(r,param);window.scrollTo({top:0,behavior:'smooth'})}
+function surahBack(){if(surahOrigin)go(surahOrigin.route,surahOrigin.param);else go('learn')}
 function seq(plan){return `<div class="sequence">${plan.sureler.map((id,i)=>`<button class="surah-card" onclick="go('surah','${id}')"><small>${i+1}. rekât</small>${sName(id)}</button>${i<plan.sureler.length-1?'<span class="arrow">→</span>':''}`).join('')}</div>`}
 function renderHome(){const vakitler=[...new Map(D.plans.map(p=>[p.vakit,p])).values()];app.innerHTML=`<section class="card hero"><h2>Bugün 3 dakika çalış</h2><p>Bir vakit seç, sûre sırasını gör, sûreye dokunarak okunuşunu ve anlamını aç.</p></section><div class="grid">${vakitler.map(v=>`<button class="prayer-card" onclick="go('prayer','${v.vakit}')"><span>${v.icon}</span><strong>${v.vakit}</strong><span class="muted">${D.plans.filter(p=>p.vakit===v.vakit).length} bölüm</span></button>`).join('')}</div>`}
 function renderPrayer(vakit){const list=D.plans.filter(p=>p.vakit===vakit);app.innerHTML=`<button class="btn ghost" onclick="go('home')">← Ana sayfa</button><div class="section-title"><h2>${list[0].icon} ${vakit}</h2></div>${list.map(p=>`<section class="card"><div class="section-title"><h2>${p.bolum}</h2>${state.learned[p.id]?'<span class="badge">✓ Öğrenildi</span>':''}</div>${seq(p)}<button class="btn" onclick="markLearned('${p.id}')">${state.learned[p.id]?'Tekrar çalış':'Sırayı öğrendim'}</button></section>`).join('')}`}
@@ -84,7 +85,7 @@ function renderOverview(){app.innerHTML=`<section class="card"><div class="secti
 function renderLearn(){app.innerHTML=`<section class="card"><div class="section-title"><h2>Öğren</h2><span class="badge">${Object.values(state.learned).filter(Boolean).length}/${D.plans.length}</span></div><p class="muted">Sûre kartına dokunarak okunuş ve anlam ekranını aç.</p></section>${D.plans.map(p=>`<section class="card"><div class="section-title"><h2>${p.icon} ${p.vakit}</h2><span class="muted">${p.bolum}</span></div>${seq(p)}<button class="btn ${state.learned[p.id]?'secondary':''}" onclick="markLearned('${p.id}')">${state.learned[p.id]?'✓ Öğrenildi · tekrar et':'Bu sırayı öğrendim'}</button></section>`).join('')}`}
 function renderSurah(id){
  const s=D.surahs[id]; stopAudio(false);
- app.innerHTML=`<button class="btn ghost" onclick="go('learn')">← Geri</button>
+ app.innerHTML=`<button class="btn ghost" onclick="surahBack()">← Geri</button>
  <section class="card"><h2 class="surah-title">${s.name} Sûresi</h2><p class="muted">Arapça metin, Türkçe okunuş, anlam ve sesli okuyuş</p>
  <div class="audio-panel">
    <audio id="surahAudio" controls playsinline preload="metadata" style="width:100%"></audio>
