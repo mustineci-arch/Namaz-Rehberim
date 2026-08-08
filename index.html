@@ -265,7 +265,7 @@ function renderSurah(id){
  <div class="tabs"><button class="active" onclick="tab(this,'arabicTab')">Arapça</button><button onclick="tab(this,'versesTab')">Okunuş + Anlam</button></div>
  <div id="arabicTab" class="tab-pane arabic">${s.arabic}</div>
  <div id="versesTab" class="tab-pane verses hidden">
-  <button class="btn secondary" id="speakBtn" onclick="toggleSpeak('${id}')">🔊 Ayet ayet sesli oku (Arapça → Türkçe)</button>
+  <button class="btn secondary" id="speakBtn" onclick="toggleSpeak('${id}')">🔊 Ayet ayet sesli oku (Arapça → Türkçe okunuş)</button>
   <p class="muted" id="speakStatus" style="text-align:center;margin:8px 0"></p>
   ${s.verses.map((v,i)=>`<div class="verse-row" id="vrow${i}"><span class="verse-no">${i+1}</span><div><p class="v-read">${v.r}</p><p class="v-mean">${v.m}</p></div></div>`).join('')}${s.note?`<p class="muted" style="margin-top:10px">${s.note}</p>`:''}
  </div></section>
@@ -342,9 +342,9 @@ function speakVerse(id,i){
  const vAr=pickVoice('ar'); if(vAr)uAr.voice=vAr;
  uAr.onend=()=>{
   if(!ttsState.playing||ttsState.idx!==i)return;
-  setSpeakStatus(`${i+1}/${s.verses.length} · Türkçe anlamı okunuyor…`);
-  const uTr=new SpeechSynthesisUtterance(s.verses[i].m);
-  uTr.lang='tr-TR'; uTr.rate=0.95;
+  setSpeakStatus(`${i+1}/${s.verses.length} · Türkçe okunuşu okunuyor…`);
+  const uTr=new SpeechSynthesisUtterance(s.verses[i].r);
+  uTr.lang='tr-TR'; uTr.rate=0.85;
   const vTr=pickVoice('tr'); if(vTr)uTr.voice=vTr;
   uTr.onend=()=>{if(ttsState.playing&&ttsState.idx===i)speakVerse(id,i+1)};
   uTr.onerror=()=>{if(ttsState.playing&&ttsState.idx===i)speakVerse(id,i+1)};
@@ -356,7 +356,7 @@ function speakVerse(id,i){
 function stopSpeak(){
  ttsState.playing=false;
  if('speechSynthesis' in window)speechSynthesis.cancel();
- const btn=document.getElementById('speakBtn');if(btn)btn.textContent='🔊 Ayet ayet sesli oku (Arapça → Türkçe)';
+ const btn=document.getElementById('speakBtn');if(btn)btn.textContent='🔊 Ayet ayet sesli oku (Arapça → Türkçe okunuş)';
  document.querySelectorAll('.verse-row').forEach(el=>el.classList.remove('active'));
 }
 function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
