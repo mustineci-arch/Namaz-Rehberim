@@ -71,7 +71,10 @@
 </script>
   <script>const D=window.APP_DATA;let state=Store.get();let currentQuiz=null;let route='home';let curParam=null;let surahOrigin=null;
 let audioState={audio:null,tracks:[],index:0,playing:false,surahId:null,rate:1};
-const AUDIO_BASE='https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/';
+const AUDIO_SOURCES=[
+ n=>`https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/${n}.mp3`,
+ n=>`https://server8.mp3quran.net/afs/${n}.mp3`
+];
 
 const app=document.getElementById('app');
 function sName(id){return D.surahs[id]?.name||id}
@@ -103,19 +106,28 @@ function renderSurah(id){
 function loadSurahAudio(id){
  const s=D.surahs[id];
  if(!s?.number) throw new Error('Sûre numarası bulunamadı.');
- const url=`${AUDIO_BASE}${String(s.number).padStart(3,'0')}.mp3`;
- audioState.tracks=[url];audioState.index=0;audioState.surahId=id;
+ const n=String(s.number).padStart(3,'0');
+ audioState.tracks=AUDIO_SOURCES.map(f=>f(n));audioState.index=0;audioState.surahId=id;
  const audio=document.getElementById('surahAudio');
- const fallback=document.getElementById('audioFallback');
  if(!audio)return;
- audio.src=url; audio.playbackRate=audioState.rate; audioState.audio=audio;
- if(fallback)fallback.href=url;
+ audio.playbackRate=audioState.rate; audioState.audio=audio;
  audio.oncanplay=()=>setAudioStatus('Ses hazır. Oynat düğmesine dokun.');
  audio.onloadstart=()=>setAudioStatus('Ses yükleniyor…');
- audio.onerror=()=>setAudioStatus('Bu yerel dosyada ses engellendi. “Ses kaynağını ayrı aç” düğmesini kullan.');
  audio.onplay=()=>setAudioStatus('Oynatılıyor.');
  audio.onpause=()=>{if(!audio.ended)setAudioStatus('Duraklatıldı.');};
  audio.onended=()=>setAudioStatus('Sûre tamamlandı.');
+ audio.onerror=()=>{
+  if(audioState.index<audioState.tracks.length-1){audioState.index++;setAudioStatus('Bu kaynak açılmadı, başka bir sunucu deneniyor…');playCurrentTrack()}
+  else setAudioStatus('Ses hiçbir kaynaktan yüklenemedi. “Ses kaynağını ayrı aç” düğmesini dene.');
+ };
+ playCurrentTrack();
+}
+function playCurrentTrack(){
+ const audio=audioState.audio;const url=audioState.tracks[audioState.index];
+ const fallback=document.getElementById('audioFallback');
+ if(!audio||!url)return;
+ audio.src=url;
+ if(fallback)fallback.href=url;
 }
 function setAudioStatus(text){const el=document.getElementById('audioStatus');if(el)el.textContent=text}
 function toggleSurahAudio(id){
