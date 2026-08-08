@@ -14,16 +14,11 @@
 
 @keyframes popIn{0%{transform:scale(.85);opacity:0}100%{transform:scale(1);opacity:1}}
 @keyframes shakeX{0%,100%{transform:translateX(0)}20%{transform:translateX(-7px)}40%{transform:translateX(6px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}}
-@keyframes popStar{0%{transform:scale(0) rotate(-20deg);opacity:0}60%{transform:scale(1.25) rotate(6deg);opacity:1}100%{transform:scale(1) rotate(0)}}
 .bolum-card{border:1px solid var(--line);background:var(--card);border-radius:18px;padding:16px;margin-bottom:12px}
 .bolum-card .section-title{margin-bottom:8px}
-.stars{font-size:16px;letter-spacing:1px;color:var(--line)}
-.stars .lit{color:var(--gold)}
 .play-btn{width:100%;border:0;border-radius:13px;padding:12px 14px;background:linear-gradient(135deg,var(--green),#178064);color:#fff;font-weight:800;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:15px}
 .game-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
 .lives{font-size:19px;letter-spacing:2px}
-.lives .lost{opacity:.25}
-.timer-badge{font-variant-numeric:tabular-nums;background:var(--green2);color:var(--green);border-radius:999px;padding:5px 11px;font-weight:800;font-size:13px}
 .slot-row{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0}
 .slot{flex:1 1 130px;min-height:56px;border:2px dashed var(--line);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;color:var(--muted);font-size:12px}
 .slot small{display:block;color:var(--muted);font-size:11px;margin-bottom:2px}
@@ -33,28 +28,19 @@
 .chip{border:1px solid #bddbce;background:var(--green2);color:var(--ink);border-radius:14px;padding:13px 15px;font-weight:800;cursor:pointer}
 .chip.wrong{animation:shakeX .4s;border-color:var(--danger);background:#f9e0e0}
 .chip.placed{display:none}
-.combo-badge{background:var(--green2);color:var(--gold);border-radius:999px;padding:5px 11px;font-weight:800;font-size:13px}
 .result-panel{text-align:center;padding:8px}
-.result-stars{font-size:44px;letter-spacing:6px;margin:6px 0 10px}
-.result-stars .lit{color:var(--gold);animation:popStar .5s ease backwards}
-.result-stars .lit:nth-child(2){animation-delay:.12s}
-.result-stars .lit:nth-child(3){animation-delay:.24s}
 .result-stat{display:flex;justify-content:center;gap:22px;margin:14px 0;color:var(--muted);font-size:13px}
 .result-stat b{display:block;color:var(--ink);font-size:19px}
 .xp-row{display:flex;align-items:center;gap:9px;margin-top:6px}
 .xp-row .progress{flex:1}
 .level-pill{background:var(--green);color:#fff;border-radius:999px;padding:5px 12px;font-weight:800;font-size:13px;white-space:nowrap}
-.dots{display:flex;gap:6px;justify-content:center;margin-bottom:4px}
-.dots span{width:8px;height:8px;border-radius:999px;background:var(--line)}
-.dots span.done{background:var(--green)}
-.option.locked-out{opacity:.45}
 </style>
 </head>
 <body>
   <header class="app-header">
     <div>
       <h1>Namaz Rehberim</h1>
-      <p>Sûre sırasını öğren, doğru sırayla oku.</p>
+      <p>Aralıklı tekrarla sûre sırasını kalıcı öğren.</p>
     </div>
     <button id="themeBtn" class="icon-btn" aria-label="Tema değiştir">◐</button>
   </header>
@@ -64,8 +50,7 @@
   <nav class="bottom-nav" aria-label="Ana menü">
     <button data-route="home" class="active">🏠<span>Ana</span></button>
     <button data-route="overview">👀<span>Bakış</span></button>
-    <button data-route="learn">📚<span>Öğren</span></button>
-    <button data-route="quiz">🧠<span>Quiz</span></button>
+    <button data-route="study">🎯<span>Çalış</span></button>
     <button data-route="progress">📊<span>İlerleme</span></button>
   </nav>
 
@@ -101,15 +86,15 @@
 };
 </script>
   <script>window.Store={
- defaults(){return {learned:{},orderBest:{},stats:{total:0,correct:0},xp:0,bestStreak:0,theme:'light'}},
+ defaults(){return {cards:{},newToday:{date:'',count:0},streak:{count:0,last:''},xp:0,theme:'light'}},
  get(){try{return Object.assign(this.defaults(),JSON.parse(localStorage.getItem('nr_state'))||{})}catch{return this.defaults()}},
  set(s){localStorage.setItem('nr_state',JSON.stringify(s))},
  reset(){localStorage.removeItem('nr_state')}
 };
 </script>
-  <script>const D=window.APP_DATA;let state=Store.get();let currentQuiz=null;let route='home';let curParam=null;let detailOrigin=null;let quizSession=null;let orderState=null;
-const MAIN_ROUTES=['home','overview','learn','quiz','progress'];
-const DETAIL_ROUTES=['surah','order'];
+  <script>const D=window.APP_DATA;let state=Store.get();let route='home';let curParam=null;let detailOrigin=null;let studySession=null;let drill=null;
+const MAIN_ROUTES=['home','overview','study','progress'];
+const DETAIL_ROUTES=['surah'];
 let audioState={audio:null,tracks:[],index:0,playing:false,surahId:null,rate:1};
 const AUDIO_SOURCES=[
  n=>`https://download.quranicaudio.com/quran/mishaari_raashid_al_3afaasee/${n}.mp3`,
@@ -120,15 +105,13 @@ const app=document.getElementById('app');
 function sName(id){return D.surahs[id]?.name||id}
 function navActive(r){document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.route===r))}
 function go(r,param){if(route==='surah'&&r!=='surah')stopAudio();if(DETAIL_ROUTES.includes(r)&&!DETAIL_ROUTES.includes(route))detailOrigin={route,param:curParam};route=r;curParam=param;if(MAIN_ROUTES.includes(r))navActive(r);render(r,param);window.scrollTo({top:0,behavior:'smooth'})}
-function detailBack(){if(detailOrigin)go(detailOrigin.route,detailOrigin.param);else go('learn')}
+function detailBack(){if(detailOrigin)go(detailOrigin.route,detailOrigin.param);else go('overview')}
 function seq(plan){return `<div class="sequence">${plan.sureler.map((id,i)=>`<button class="surah-card" onclick="go('surah','${id}')"><small>${i+1}. rekât</small>${sName(id)}</button>${i<plan.sureler.length-1?'<span class="arrow">→</span>':''}`).join('')}</div>`}
-function starsHtml(id){const n=state.orderBest[id]?.stars||0;return `<span class="stars">${[0,1,2].map(i=>i<n?'<span class="lit">★</span>':'☆').join('')}</span>`}
-function playBtnLabel(id){return state.learned[id]?'↺ Tekrar oyna':'▶ Sıralama oyununu oyna'}
-function bolumCard(p){return `<section class="bolum-card"><div class="section-title"><h2>${p.icon} ${p.bolum}</h2>${starsHtml(p.id)}</div>${seq(p)}<button class="play-btn" onclick="go('order','${p.id}')">${playBtnLabel(p.id)}</button></section>`}
-function renderHome(){const vakitler=[...new Map(D.plans.map(p=>[p.vakit,p])).values()];app.innerHTML=`<section class="card hero"><h2>Bugün 3 dakika çalış</h2><p>Bir vakit seç, sûre sırasını gör, sûreye dokunarak okunuşunu ve anlamını aç.</p></section><div class="grid">${vakitler.map(v=>`<button class="prayer-card" onclick="go('prayer','${v.vakit}')"><span>${v.icon}</span><strong>${v.vakit}</strong><span class="muted">${D.plans.filter(p=>p.vakit===v.vakit).length} bölüm</span></button>`).join('')}</div>`}
-function renderPrayer(vakit){const list=D.plans.filter(p=>p.vakit===vakit);app.innerHTML=`<button class="btn ghost" onclick="go('home')">← Ana sayfa</button><div class="section-title"><h2>${list[0].icon} ${vakit}</h2></div>${list.map(bolumCard).join('')}`}
-function renderOverview(){app.innerHTML=`<section class="card"><div class="section-title"><h2>Hızlı Bakış</h2><span class="badge">Tüm vakitler</span></div><table><thead><tr><th>Vakit / bölüm</th><th>Sûre sırası</th></tr></thead><tbody>${D.plans.map(p=>`<tr><td><b>${p.icon} ${p.vakit}</b><br><span class="muted">${p.bolum}</span><br>${starsHtml(p.id)}</td><td>${p.sureler.map((x,i)=>`<button class="surah-card" style="min-width:auto;padding:7px 9px;margin:2px" onclick="go('surah','${x}')">${i+1}. ${sName(x)}</button>`).join(' ')}</td></tr>`).join('')}</tbody></table></section>`}
-function renderLearn(){app.innerHTML=`<section class="card"><div class="section-title"><h2>Öğren</h2><span class="badge">${Object.values(state.learned).filter(Boolean).length}/${D.plans.length}</span></div><p class="muted">Bir bölüme dokun, sûreleri doğru sırayla dizerek oyna. Ne kadar hatasız ve hızlı dizersen o kadar yıldız kazanırsın.</p></section>${D.plans.map(bolumCard).join('')}`}
+function cardLabel(id){const c=state.cards[id];if(!c)return '🆕 Yeni';if(c.box>=6)return '🏆 Ustalaştı';if(c.due<=today())return '⏰ Bugün tekrar';return `📦 Kutu ${c.box} · ${fmtDate(c.due)}`}
+function bolumInfoCard(p){return `<section class="bolum-card"><div class="section-title"><h2>${p.icon} ${p.bolum}</h2><span class="badge">${cardLabel(p.id)}</span></div>${seq(p)}</section>`}
+function renderHome(){const vakitler=[...new Map(D.plans.map(p=>[p.vakit,p])).values()];const dueN=studyDueCount();app.innerHTML=`<section class="card hero"><h2>🔥 ${state.streak.count} günlük seri</h2><p>${dueN?`Bugün ${dueN} bölüm çalışmanı bekliyor.`:'Bugün için planlanan tekrar yok, harikasın!'}</p><button class="btn secondary" style="margin-top:10px" onclick="go('study')">${dueN?'▶ Çalış':'🔁 Serbest pratik'}</button></section><div class="grid">${vakitler.map(v=>`<button class="prayer-card" onclick="go('prayer','${v.vakit}')"><span>${v.icon}</span><strong>${v.vakit}</strong><span class="muted">${D.plans.filter(p=>p.vakit===v.vakit).length} bölüm</span></button>`).join('')}</div>`}
+function renderPrayer(vakit){const list=D.plans.filter(p=>p.vakit===vakit);app.innerHTML=`<button class="btn ghost" onclick="go('home')">← Ana sayfa</button><div class="section-title"><h2>${list[0].icon} ${vakit}</h2></div>${list.map(bolumInfoCard).join('')}`}
+function renderOverview(){app.innerHTML=`<section class="card"><div class="section-title"><h2>Hızlı Bakış</h2><span class="badge">Tüm vakitler</span></div><table><thead><tr><th>Vakit / bölüm</th><th>Sûre sırası</th></tr></thead><tbody>${D.plans.map(p=>`<tr><td><b>${p.icon} ${p.vakit}</b><br><span class="muted">${p.bolum}</span><br><span class="badge">${cardLabel(p.id)}</span></td><td>${p.sureler.map((x,i)=>`<button class="surah-card" style="min-width:auto;padding:7px 9px;margin:2px" onclick="go('surah','${x}')">${i+1}. ${sName(x)}</button>`).join(' ')}</td></tr>`).join('')}</tbody></table></section>`}
 function renderSurah(id){
  const s=D.surahs[id]; stopAudio(false);
  app.innerHTML=`<button class="btn ghost" onclick="detailBack()">← Geri</button>
@@ -186,144 +169,171 @@ function stopAudio(clear=true){if(audioState.audio){audioState.audio.pause()}aud
 function tab(btn,id){document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');document.querySelectorAll('.tab-pane').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden')}
 function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function xpToLevel(xp){return {level:1+Math.floor(xp/100),inLevel:xp%100}}
-function addXp(n){state.xp+=n;Store.set(state)}
-function renderOrder(pid){
- const p=D.plans.find(x=>x.id===pid);
- let shuffled=shuffle(p.sureler);
- if(shuffled.length>1&&shuffled.every((id,i)=>id===p.sureler[i]))[shuffled[0],shuffled[1]]=[shuffled[1],shuffled[0]];
- orderState={p,shuffled,placed:[],mistakes:0,lives:3,start:Date.now(),timer:null,done:false};
- orderState.timer=setInterval(orderTick,1000);
- paintOrder();
+
+/* ---- Aralıklı tekrar (Leitner kutu) motoru ----
+   Kutu 0-6, her kutunun bir bekleme süresi var. Bir bölümü hatasız
+   tamamlarsan bir üst kutuya çıkar ve tekrar tarihi uzar; hata yaparsan
+   bir alt kutuya iner ve yakında tekrar karşına çıkar. Yeni bölümler
+   güne 3 adetle sınırlı tanıtılır, aşırı yüklenmeyi önlemek için. */
+const BOX_INTERVALS=[0,1,2,4,7,14,30];
+const DAILY_NEW_LIMIT=3;
+function today(){return new Date().toISOString().slice(0,10)}
+function daysFromNow(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)}
+function fmtDate(iso){const d=new Date(iso+'T00:00:00');return d.toLocaleDateString('tr-TR',{day:'numeric',month:'short'})}
+function newList(){return D.plans.filter(p=>!state.cards[p.id])}
+function dueList(){return D.plans.filter(p=>{const c=state.cards[p.id];return c&&c.due<=today()})}
+function newQuotaLeft(){return Math.max(0,DAILY_NEW_LIMIT-(state.newToday.date===today()?state.newToday.count:0))}
+function studyDueCount(){return dueList().length+Math.min(newQuotaLeft(),newList().length)}
+function introduceToday(){
+ if(state.newToday.date!==today())state.newToday={date:today(),count:0};
+ const room=newQuotaLeft();
+ if(room<=0)return[];
+ const fresh=newList().slice(0,room);
+ fresh.forEach(p=>{state.cards[p.id]={box:0,due:today(),lapses:0}});
+ state.newToday.count+=fresh.length;
+ return fresh;
 }
-function orderTick(){const el=document.getElementById('orderTimer');if(el&&orderState)el.textContent=fmtTime(Date.now()-orderState.start)}
-function fmtTime(ms){const s=Math.floor(ms/1000);return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
-function paintOrder(){
- if(!orderState)return;
- const {p,shuffled,placed,mistakes,lives}=orderState;
- app.innerHTML=`<button class="btn ghost" onclick="exitOrder()">← Geri</button>
- <section class="card">
- <div class="game-top"><span class="lives">${'❤️'.repeat(lives)}${'🤍'.repeat(3-lives)}</span><span class="timer-badge" id="orderTimer">${fmtTime(Date.now()-orderState.start)}</span></div>
- <h2 class="surah-title">${p.icon} ${p.bolum}</h2><p class="muted">Sûreleri, namazda okunma sırasına göre tıklayarak diz.</p>
- <div class="slot-row">${p.sureler.map((id,i)=>`<div class="slot ${i<placed.length?'filled':''}"><small>${i+1}. rekât</small>${i<placed.length?sName(placed[i]):'?'}</div>`).join('')}</div>
- <div class="chip-tray" id="chipTray">${shuffled.map((id,i)=>`<button class="chip ${placed.includes(id)?'placed':''}" id="chip${i}" onclick="pickOrderChip(${i})">${sName(id)}</button>`).join('')}</div>
- ${mistakes?`<p class="muted">Hata: ${mistakes}</p>`:''}
- </section>`;
+function buildQueue(){
+ const fresh=introduceToday();
+ const freshIds=new Set(fresh.map(p=>p.id));
+ const due=dueList();
+ Store.set(state);
+ const tasks=due.map(p=>({p,stage:freshIds.has(p.id)?'A':(state.cards[p.id].box<=2?'B':'C')}));
+ return shuffle(tasks);
 }
-function pickOrderChip(i){
- if(!orderState||orderState.done)return;
- const id=orderState.shuffled[i];
- if(orderState.placed.includes(id))return;
- const expected=orderState.p.sureler[orderState.placed.length];
- if(id===expected){
-  orderState.placed.push(id);
-  if(orderState.placed.length===orderState.p.sureler.length){completeOrder();return}
-  paintOrder();
- }else{
-  orderState.mistakes++;orderState.lives--;
-  const chip=document.getElementById(`chip${i}`);
-  if(chip){chip.classList.add('wrong');setTimeout(()=>chip.classList.remove('wrong'),400)}
-  if(orderState.lives<=0){failOrder();return}
-  paintOrder();
- }
-}
-function completeOrder(){
- clearInterval(orderState.timer);orderState.done=true;
- const ms=Date.now()-orderState.start,{mistakes}=orderState,pid=orderState.p.id;
- const stars=mistakes===0?3:mistakes<=1?2:1;
- const prev=state.orderBest[pid];
- if(!prev||stars>prev.stars||(stars===prev.stars&&ms<prev.ms))state.orderBest[pid]={stars,mistakes,ms};
- const gainedXp=20+stars*10;
- state.learned[pid]=true;addXp(gainedXp);
- const {level}=xpToLevel(state.xp);
- app.innerHTML=`<section class="card result-panel">
- <h2>${stars===3?'Mükemmel! 🎉':stars===2?'Harika! 👏':'Tamamlandı 🙂'}</h2>
- <div class="result-stars">${[0,1,2].map(i=>i<stars?'<span class="lit">★</span>':'☆').join('')}</div>
- <div class="result-stat"><div><b>${fmtTime(ms)}</b>süre</div><div><b>${mistakes}</b>hata</div><div><b>+${gainedXp}</b>XP</div></div>
- <p class="muted">Şu an seviye ${level}.</p>
- <button class="btn" onclick="go('order','${pid}')">↺ Tekrar oyna</button>
- <button class="btn secondary" onclick="detailBack()">Bölüme dön</button>
- </section>`;
+function updateStreak(){
+ const t=today();
+ if(state.streak.last===t)return;
+ state.streak.count=state.streak.last===daysFromNow(-1)?state.streak.count+1:1;
+ state.streak.last=t;
  Store.set(state);
 }
-function failOrder(){
- clearInterval(orderState.timer);orderState.done=true;
- const p=orderState.p;
- app.innerHTML=`<section class="card result-panel">
- <h2>Canların bitti 💔</h2>
- <p class="muted">Doğru sıra:</p>
- <div class="slot-row">${p.sureler.map((id,i)=>`<div class="slot filled"><small>${i+1}. rekât</small>${sName(id)}</div>`).join('')}</div>
- <button class="btn" onclick="go('order','${p.id}')">↺ Tekrar dene</button>
- <button class="btn secondary" onclick="detailBack()">Bölüme dön</button>
- </section>`;
+function beginStudySession(practiceMode){
+ let tasks;
+ if(practiceMode){
+  const introduced=D.plans.filter(p=>state.cards[p.id]);
+  tasks=shuffle(introduced.map(p=>({p,stage:state.cards[p.id].box<=2?'B':'C'})));
+ }else{
+  tasks=buildQueue();
+ }
+ studySession={queue:tasks,idx:0,promoted:0,demoted:0,xp:0,practice:practiceMode};
+ renderStudy();
 }
-function exitOrder(){if(orderState?.timer)clearInterval(orderState.timer);orderState=null;detailBack()}
-function eligible(){return D.plans.filter(p=>state.learned[p.id])}
-function newQuestion(){const e=eligible();if(!e.length)return null;const p=e[Math.floor(Math.random()*e.length)],i=Math.floor(Math.random()*p.sureler.length);let q,a;if(i<p.sureler.length-1&&Math.random()>.35){q=`${sName(p.sureler[i])} sûresinden sonra hangisi gelir?`;a=p.sureler[i+1]}else{q=`${p.vakit} – ${p.bolum} bölümünde ${i+1}. rekâtta hangi sûre var?`;a=p.sureler[i]}const pool=[...new Set(Object.keys(D.surahs))].filter(x=>x!==a).sort(()=>Math.random()-.5).slice(0,3);return{p,q,a,opts:[...pool,a].sort(()=>Math.random()-.5)}}
-const QUIZ_LEN=8;
-function startQuizSession(){quizSession={qi:0,total:QUIZ_LEN,correct:0,lives:3,combo:0,bestCombo:0,xp:0,finished:false}}
-function renderQuiz(){
- const e=eligible();
- if(!e.length){app.innerHTML=`<section class="card"><h2>Quiz kilitli</h2><p>Önce Öğren bölümünden en az bir sıralama oyununu tamamla.</p><button class="btn" onclick="go('learn')">Öğren bölümüne git</button></section>`;return}
- if(!quizSession||quizSession.finished)startQuizSession();
- if(quizSession.lives<=0||quizSession.qi>=quizSession.total){quizSession.finished=true;renderQuizSummary();return}
- currentQuiz=newQuestion();
+function renderStudy(){
+ if(!studySession){
+  const dueN=dueList().length,newN=Math.min(newQuotaLeft(),newList().length),total=dueN+newN;
+  const anyIntroduced=D.plans.some(p=>state.cards[p.id]);
+  app.innerHTML=`<section class="card hero"><h2>🔥 ${state.streak.count} günlük seri</h2>
+  <p>${total?`Bugün ${total} bölüm seni bekliyor: ${newN} yeni, ${dueN} tekrar.`:'Bugün için planlanan tekrar yok. Harika gidiyorsun! 🎉'}</p></section>
+  <section class="card">${total?`<button class="play-btn" onclick="beginStudySession(false)">▶ Bugün Çalış (${total})</button>`:anyIntroduced?`<button class="play-btn" onclick="beginStudySession(true)">🔁 Serbest pratik yap</button>`:`<p class="muted">Başlamak için Bugün Çalış'a bas, ilk bölümler tanıtılsın.</p><button class="play-btn" onclick="beginStudySession(false)">▶ Başla</button>`}</section>
+  <section class="card"><h2>Bölümler</h2>${D.plans.map(p=>`<div class="section-title"><span class="muted">${p.icon} ${p.bolum}</span><span class="badge">${cardLabel(p.id)}</span></div>`).join('')}</section>`;
+  return;
+ }
+ if(studySession.idx>=studySession.queue.length){renderStudySummary();return}
+ const task=studySession.queue[studySession.idx];
+ if(task.stage==='A')renderStageA(task);else renderDrill(task);
+}
+function renderStageA(task){
+ const p=task.p;
  app.innerHTML=`<section class="card">
- <div class="game-top"><span class="lives">${'❤️'.repeat(quizSession.lives)}${'🤍'.repeat(3-quizSession.lives)}</span>${quizSession.combo>1?`<span class="combo-badge">🔥 ${quizSession.combo} seri</span>`:''}</div>
- <div class="dots">${Array.from({length:quizSession.total}).map((_,i)=>`<span class="${i<quizSession.qi?'done':''}"></span>`).join('')}</div>
- <p class="muted">${currentQuiz.p.icon} ${currentQuiz.p.vakit} · ${currentQuiz.p.bolum}</p>
- <h3>${currentQuiz.q}</h3>
- <div id="opts">${currentQuiz.opts.map(o=>`<button class="option" onclick="answer(this,'${o}')">${sName(o)}</button>`).join('')}</div>
- <button id="nextQ" class="btn hidden" onclick="renderQuiz()">Sonraki soru</button>
+ <span class="badge">🆕 Yeni bölüm · ${studySession.idx+1}/${studySession.queue.length}</span>
+ <h2 class="surah-title">${p.icon} ${p.bolum}</h2>
+ <p class="muted">${p.vakit} vaktinde bu bölümde okunan sûre sırası budur. Birkaç kez oku, sonra hemen deneyeceksin:</p>
+ <div class="slot-row">${p.sureler.map((id,i)=>`<div class="slot filled"><small>${i+1}. rekât</small>${sName(id)}</div>`).join('')}</div>
+ <button class="btn" onclick="advanceStudy()">Hazırım, sırala →</button>
  </section>`;
 }
-function renderQuizSummary(){
- const {level}=xpToLevel(state.xp);
- app.innerHTML=`<section class="card result-panel">
- <h2>Tur bitti 🏁</h2>
- <div class="result-stat"><div><b>${quizSession.correct}/${quizSession.qi}</b>doğru</div><div><b>🔥${quizSession.bestCombo}</b>en uzun seri</div><div><b>+${quizSession.xp}</b>XP</div></div>
- <p class="muted">Şu an seviye ${level}.</p>
- <button class="btn" onclick="quizSession=null;go('quiz')">↺ Yeni tur</button>
- <button class="btn secondary" onclick="go('progress')">İlerlemeyi gör</button>
- </section>`;
-}
-function answer(btn,val){
- document.querySelectorAll('.option').forEach(b=>b.disabled=true);
- state.stats.total++;
- if(val===currentQuiz.a){
-  state.stats.correct++;btn.classList.add('correct');
-  quizSession.correct++;quizSession.combo++;
-  quizSession.bestCombo=Math.max(quizSession.bestCombo,quizSession.combo);
-  state.bestStreak=Math.max(state.bestStreak,quizSession.combo);
-  const gained=10+Math.min(quizSession.combo*2,20);
-  state.xp+=gained;quizSession.xp+=gained;
- }else{
-  btn.classList.add('wrong');
-  document.querySelectorAll('.option').forEach(b=>{if(b.textContent===sName(currentQuiz.a))b.classList.add('correct')});
-  quizSession.combo=0;quizSession.lives--;
+function advanceStudy(){studySession.queue[studySession.idx].stage='B';drill=null;renderStudy()}
+function poolFor(task){
+ if(task.stage==='C'){
+  const target=task.p.sureler;
+  const allIds=[...new Set(D.plans.flatMap(pp=>pp.sureler))];
+  const distractors=shuffle(allIds.filter(id=>!target.includes(id))).slice(0,Math.max(0,6-target.length));
+  return shuffle([...target,...distractors]);
  }
- quizSession.qi++;
+ return shuffle(task.p.sureler);
+}
+function renderDrill(task){
+ if(!drill||drill.taskP!==task.p.id||drill.stage!==task.stage)drill={taskP:task.p.id,stage:task.stage,pool:poolFor(task),placed:[],mistakes:0,lives:3};
+ const p=task.p;
+ app.innerHTML=`<section class="card">
+ <div class="game-top"><span class="badge">${task.stage==='C'?'🧠 Hatırla':'🧩 Diz'} · ${studySession.idx+1}/${studySession.queue.length}</span><span class="lives">${'❤️'.repeat(drill.lives)}${'🤍'.repeat(3-drill.lives)}</span></div>
+ <h2 class="surah-title">${p.icon} ${p.bolum}</h2>
+ <p class="muted">${task.stage==='C'?'Bu bölümde okunan sûreleri, aralarına karışan başka sûrelerden ayırarak doğru sırayla seç.':'Sûreleri doğru sırayla tıkla.'}</p>
+ <div class="slot-row">${p.sureler.map((id,i)=>`<div class="slot ${i<drill.placed.length?'filled':''}"><small>${i+1}. rekât</small>${i<drill.placed.length?sName(drill.placed[i]):'?'}</div>`).join('')}</div>
+ <div class="chip-tray">${drill.pool.map((id,i)=>`<button class="chip ${drill.placed.includes(id)?'placed':''}" id="dchip${i}" onclick="pickDrillChip(${i})">${sName(id)}</button>`).join('')}</div>
+ </section>`;
+}
+function pickDrillChip(i){
+ if(!drill)return;
+ const task=studySession.queue[studySession.idx];
+ const id=drill.pool[i];
+ if(drill.placed.includes(id))return;
+ const expected=task.p.sureler[drill.placed.length];
+ if(id===expected){
+  drill.placed.push(id);
+  if(drill.placed.length===task.p.sureler.length){finishDrill(task);return}
+  renderDrill(task);
+ }else{
+  drill.mistakes++;drill.lives--;
+  const chip=document.getElementById(`dchip${i}`);
+  if(chip){chip.classList.add('wrong');setTimeout(()=>chip.classList.remove('wrong'),400)}
+  if(drill.lives<=0){finishDrill(task,true);return}
+  renderDrill(task);
+ }
+}
+function finishDrill(task,failed){
+ const p=task.p,success=!failed&&drill.mistakes===0;
+ if(!studySession.practice){
+  const c=state.cards[p.id]||(state.cards[p.id]={box:0,due:today(),lapses:0});
+  if(success){c.box=Math.min(c.box+1,BOX_INTERVALS.length-1);studySession.promoted++}
+  else{c.box=Math.max(c.box-1,0);c.lapses++;studySession.demoted++}
+  c.due=daysFromNow(BOX_INTERVALS[c.box]);
+ }
+ const gained=success?10+p.sureler.length*4:4;
+ state.xp+=gained;studySession.xp+=gained;
  Store.set(state);
- const nb=document.getElementById('nextQ');
- if(nb){nb.textContent=quizSession.lives<=0||quizSession.qi>=quizSession.total?'Sonucu gör':'Sonraki soru';nb.classList.remove('hidden')}
+ drill=null;studySession.idx++;
+ renderStudyStepResult(p,success,gained,failed);
+}
+function renderStudyStepResult(p,success,gained,failed){
+ const c=state.cards[p.id];
+ app.innerHTML=`<section class="card result-panel">
+ <h2>${failed?'😵 Bu sefer olmadı':success?'✅ Harika!':'🙂 Tekrar gerekecek'}</h2>
+ <p class="muted">${p.icon} ${p.bolum}</p>
+ ${!studySession.practice&&c?`<p>Kutu <b>${c.box}</b>/6 · Sıradaki tekrar: <b>${fmtDate(c.due)}</b></p>`:''}
+ <p class="muted">+${gained} XP</p>
+ <button class="btn" onclick="renderStudy()">Devam et →</button>
+ </section>`;
+}
+function renderStudySummary(){
+ updateStreak();
+ const {level}=xpToLevel(state.xp),{queue,promoted,xp,practice}=studySession;
+ app.innerHTML=`<section class="card result-panel">
+ <h2>Bugünkü çalışma bitti 🎉</h2>
+ <div class="result-stat"><div><b>${queue.length}</b>bölüm</div><div><b>${practice?'—':promoted}</b>ilerledi</div><div><b>+${xp}</b>XP</div></div>
+ <p class="muted">Seviye ${level} · 🔥 ${state.streak.count} günlük seri</p>
+ <button class="btn" onclick="studySession=null;go('study')">Bitir</button>
+ </section>`;
+ studySession=null;
 }
 function renderProgress(){
- const learned=Object.values(state.learned).filter(Boolean).length;
- const pct=D.plans.length?Math.round(learned/D.plans.length*100):0;
- const acc=state.stats.total?Math.round(state.stats.correct/state.stats.total*100):0;
- const starsSum=Object.values(state.orderBest).reduce((s,o)=>s+o.stars,0);
- const maxStars=D.plans.length*3;
+ const cards=Object.values(state.cards);
+ const mastered=cards.filter(c=>c.box>=6).length;
+ const dueN=dueList().length;
+ const boxCounts=[0,1,2,3,4,5,6].map(b=>cards.filter(c=>c.box===b).length);
  const {level,inLevel}=xpToLevel(state.xp);
  app.innerHTML=`<section class="card">
  <div class="section-title"><h2>İlerleme</h2><span class="level-pill">Seviye ${level}</span></div>
  <div class="xp-row"><div class="progress"><span style="width:${inLevel}%"></span></div><span class="muted">${inLevel}/100 XP</span></div>
  </section>
- <section class="card"><h2>${learned}/${D.plans.length} bölüm tamamlandı</h2><div class="progress"><span style="width:${pct}%"></span></div></section>
- <section class="card"><h2>⭐ ${starsSum}/${maxStars} yıldız</h2><p class="muted">Sıralama oyununu hatasız ve hızlı bitirdikçe daha çok yıldız kazanırsın.</p></section>
- <section class="card"><h2>Quiz başarısı</h2><p><b>%${acc}</b> · ${state.stats.correct} doğru / ${state.stats.total} soru</p><p class="muted">En uzun seri: 🔥 ${state.bestStreak}</p></section>
+ <section class="card"><h2>${cards.length}/${D.plans.length} bölüm tanıtıldı</h2><div class="progress"><span style="width:${D.plans.length?Math.round(cards.length/D.plans.length*100):0}%"></span></div><p class="muted">🏆 ${mastered} bölüm ustalaştı · ⏰ ${dueN} bölüm bugün tekrar bekliyor</p></section>
+ <section class="card"><h2>Kutu dağılımı</h2><p class="muted">Aralıklı tekrar sistemi: hatasız tamamladıkça kutu yükselir, tekrar süresi uzar.</p>${boxCounts.map((n,b)=>`<div class="section-title"><span class="muted">📦 Kutu ${b}${b===6?' (ustalaştı)':''}</span><span class="badge">${n}</span></div>`).join('')}</section>
+ <section class="card"><h2>🔥 ${state.streak.count} günlük seri</h2><p class="muted">Her gün en az bir bölüm çalışarak seriyi canlı tut.</p></section>
  <button class="btn ghost" onclick="resetAll()">Tüm ilerlemeyi sıfırla</button>`;
 }
-function resetAll(){if(confirm('Tüm öğrenme ve quiz kayıtları silinsin mi?')){Store.reset();state=Store.get();quizSession=null;orderState=null;renderProgress()}}
-function render(r,param){({home:renderHome,overview:renderOverview,learn:renderLearn,quiz:renderQuiz,progress:renderProgress,prayer:()=>renderPrayer(param),surah:()=>renderSurah(param),order:()=>renderOrder(param)}[r]||renderHome)()}
+function resetAll(){if(confirm('Tüm öğrenme ilerlemesi silinsin mi?')){Store.reset();state=Store.get();studySession=null;drill=null;renderProgress()}}
+function render(r,param){({home:renderHome,overview:renderOverview,study:renderStudy,progress:renderProgress,prayer:()=>renderPrayer(param),surah:()=>renderSurah(param)}[r]||renderHome)()}
 document.querySelectorAll('.bottom-nav button').forEach(b=>b.onclick=()=>go(b.dataset.route));document.getElementById('themeBtn').onclick=()=>{document.documentElement.classList.toggle('dark');state.theme=document.documentElement.classList.contains('dark')?'dark':'light';Store.set(state)};if(state.theme==='dark')document.documentElement.classList.add('dark');renderHome();
 </script>
 </body>
