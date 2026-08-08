@@ -39,6 +39,9 @@
 .verse-no{flex:0 0 auto;width:26px;height:26px;border-radius:999px;background:var(--green2);color:var(--green);font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;margin-top:2px}
 .v-read{margin:0 0 4px;font-size:17px;font-weight:700;color:var(--ink)}
 .v-mean{margin:0;font-size:15px;color:var(--muted);line-height:1.55}
+.verse-row{border-radius:12px;padding:6px 8px;margin:0 -8px;transition:background .25s}
+.verse-row.active{background:var(--green2)}
+.verse-row.active .verse-no{background:var(--green);color:#fff}
 </style>
 </head>
 <body>
@@ -185,7 +188,7 @@ const AUDIO_SOURCES=[
 const app=document.getElementById('app');
 function sName(id){return D.surahs[id]?.name||id}
 function navActive(r){document.querySelectorAll('.bottom-nav button').forEach(b=>b.classList.toggle('active',b.dataset.route===r))}
-function go(r,param){if(route==='surah'&&r!=='surah')stopAudio();if(DETAIL_ROUTES.includes(r)&&!DETAIL_ROUTES.includes(route))detailOrigin={route,param:curParam};route=r;curParam=param;if(MAIN_ROUTES.includes(r))navActive(r);render(r,param);window.scrollTo({top:0,behavior:'smooth'})}
+function go(r,param){if(route==='surah'&&r!=='surah'){stopAudio();stopSpeak()}if(DETAIL_ROUTES.includes(r)&&!DETAIL_ROUTES.includes(route))detailOrigin={route,param:curParam};route=r;curParam=param;if(MAIN_ROUTES.includes(r))navActive(r);render(r,param);window.scrollTo({top:0,behavior:'smooth'})}
 function detailBack(){if(detailOrigin)go(detailOrigin.route,detailOrigin.param);else go('overview')}
 function seq(plan){return `<div class="sequence">${plan.sureler.map((id,i)=>`<button class="surah-card" onclick="go('surah','${id}')"><small>${i+1}. rekât</small>${sName(id)}</button>${i<plan.sureler.length-1?'<span class="arrow">→</span>':''}`).join('')}</div>`}
 
@@ -246,7 +249,7 @@ function renderOverview(){
  <section class="card"><div class="section-title"><h2>Ayrıntılı sıra</h2><span class="badge">Tüm vakitler</span></div><table><thead><tr><th>Vakit / bölüm</th><th>Sûre sırası</th></tr></thead><tbody>${D.plans.map(p=>`<tr><td><b>${p.icon} ${p.vakit}</b><br><span class="muted">${p.bolum}</span></td><td>${p.sureler.map((x,i)=>`<button class="surah-card" style="min-width:auto;padding:7px 9px;margin:2px" onclick="go('surah','${x}')">${i+1}. ${sName(x)}</button>`).join(' ')}</td></tr>`).join('')}</tbody></table></section>`;
 }
 function renderSurah(id){
- const s=D.surahs[id]; stopAudio(false);
+ const s=D.surahs[id]; stopAudio(false); stopSpeak();
  app.innerHTML=`<button class="btn ghost" onclick="detailBack()">← Geri</button>
  <section class="card"><h2 class="surah-title">${s.name} Sûresi</h2><p class="muted">Arapça metin, Türkçe okunuş, anlam ve sesli okuyuş</p>
  <div class="audio-panel">
@@ -261,8 +264,12 @@ function renderSurah(id){
  </div>
  <div class="tabs"><button class="active" onclick="tab(this,'arabicTab')">Arapça</button><button onclick="tab(this,'versesTab')">Okunuş + Anlam</button></div>
  <div id="arabicTab" class="tab-pane arabic">${s.arabic}</div>
- <div id="versesTab" class="tab-pane verses hidden">${s.verses.map((v,i)=>`<div class="verse-row"><span class="verse-no">${i+1}</span><div><p class="v-read">${v.r}</p><p class="v-mean">${v.m}</p></div></div>`).join('')}${s.note?`<p class="muted" style="margin-top:10px">${s.note}</p>`:''}</div></section>
- <section class="notice">Türkçe okunuş yalnızca yardımcıdır. Sesli okuyuş çevrim içi Kur’an ses servisinden alınır.</section>`; setTimeout(()=>loadSurahAudio(id),0)}
+ <div id="versesTab" class="tab-pane verses hidden">
+  <button class="btn secondary" id="speakBtn" onclick="toggleSpeak('${id}')">🔊 Ayet ayet sesli oku (Arapça → Türkçe)</button>
+  <p class="muted" id="speakStatus" style="text-align:center;margin:8px 0"></p>
+  ${s.verses.map((v,i)=>`<div class="verse-row" id="vrow${i}"><span class="verse-no">${i+1}</span><div><p class="v-read">${v.r}</p><p class="v-mean">${v.m}</p></div></div>`).join('')}${s.note?`<p class="muted" style="margin-top:10px">${s.note}</p>`:''}
+ </div></section>
+ <section class="notice">Türkçe okunuş yalnızca yardımcıdır. Sesli okuyuş çevrim içi Kur’an ses servisinden alınır. "Ayet ayet sesli oku" cihazının kendi konuşma motorunu kullanır; Arapça telaffuz kalitesi cihaza göre değişebilir, gerçek kıraat için üstteki oynatıcıyı kullan.</section>`; setTimeout(()=>loadSurahAudio(id),0)}
 function loadSurahAudio(id){
  const s=D.surahs[id];
  if(!s?.number) throw new Error('Sûre numarası bulunamadı.');
@@ -301,6 +308,57 @@ function restartSurahAudio(id){const a=audioState.audio||document.getElementById
 function setAudioRate(btn,rate){audioState.rate=rate;if(audioState.audio)audioState.audio.playbackRate=rate;document.querySelectorAll('.speed').forEach(x=>x.classList.remove('active'));btn.classList.add('active')}
 function stopAudio(clear=true){if(audioState.audio){audioState.audio.pause()}audioState.audio=null;audioState.playing=false;if(clear){audioState.tracks=[];audioState.index=0;audioState.surahId=null}}
 function tab(btn,id){document.querySelectorAll('.tabs button').forEach(x=>x.classList.remove('active'));btn.classList.add('active');document.querySelectorAll('.tab-pane').forEach(x=>x.classList.add('hidden'));document.getElementById(id).classList.remove('hidden')}
+
+/* ---- Ayet ayet sesli okuma (tarayıcının konuşma sentezi) ----
+   Gerçek kıraat sesi yukarıdaki oynatıcıdan gelir; bu özellik ise her
+   ayeti önce Arapça, sonra Türkçe anlamıyla art arda "konuşarak" okur —
+   hangi cümlenin ne anlama geldiğini kulakla da pekiştirmek için. */
+let ttsState={playing:false,idx:0,surahId:null};
+let ttsVoices=[];
+if('speechSynthesis' in window){
+ const loadVoices=()=>{ttsVoices=speechSynthesis.getVoices()};
+ speechSynthesis.onvoiceschanged=loadVoices; loadVoices();
+}
+function pickVoice(langPrefix){return ttsVoices.find(v=>v.lang&&v.lang.toLowerCase().startsWith(langPrefix))}
+function arabicVerses(s){return s.arabic.split('۝').map(x=>x.trim()).filter(Boolean)}
+function setSpeakStatus(t){const el=document.getElementById('speakStatus');if(el)el.textContent=t}
+function highlightVerseRow(i){document.querySelectorAll('.verse-row').forEach(el=>el.classList.remove('active'));const row=document.getElementById(`vrow${i}`);if(row){row.classList.add('active');row.scrollIntoView({block:'center',behavior:'smooth'})}}
+function toggleSpeak(id){
+ if(!('speechSynthesis' in window)){setSpeakStatus('Bu tarayıcı sesli okumayı desteklemiyor.');return}
+ if(ttsState.playing){stopSpeak();return}
+ ttsState={playing:true,idx:0,surahId:id};
+ speechSynthesis.cancel();
+ const btn=document.getElementById('speakBtn');if(btn)btn.textContent='⏹ Durdur';
+ speakVerse(id,0);
+}
+function speakVerse(id,i){
+ const s=D.surahs[id],av=arabicVerses(s);
+ if(!ttsState.playing||i>=s.verses.length){stopSpeak();setSpeakStatus(i>=s.verses.length?'Bitti.':'');return}
+ ttsState.idx=i;
+ highlightVerseRow(i);
+ setSpeakStatus(`${i+1}/${s.verses.length} · Arapça okunuyor…`);
+ const uAr=new SpeechSynthesisUtterance(av[i]||'');
+ uAr.lang='ar-SA'; uAr.rate=0.82;
+ const vAr=pickVoice('ar'); if(vAr)uAr.voice=vAr;
+ uAr.onend=()=>{
+  if(!ttsState.playing||ttsState.idx!==i)return;
+  setSpeakStatus(`${i+1}/${s.verses.length} · Türkçe anlamı okunuyor…`);
+  const uTr=new SpeechSynthesisUtterance(s.verses[i].m);
+  uTr.lang='tr-TR'; uTr.rate=0.95;
+  const vTr=pickVoice('tr'); if(vTr)uTr.voice=vTr;
+  uTr.onend=()=>{if(ttsState.playing&&ttsState.idx===i)speakVerse(id,i+1)};
+  uTr.onerror=()=>{if(ttsState.playing&&ttsState.idx===i)speakVerse(id,i+1)};
+  speechSynthesis.speak(uTr);
+ };
+ uAr.onerror=()=>{if(ttsState.playing&&ttsState.idx===i)speakVerse(id,i+1)};
+ speechSynthesis.speak(uAr);
+}
+function stopSpeak(){
+ ttsState.playing=false;
+ if('speechSynthesis' in window)speechSynthesis.cancel();
+ const btn=document.getElementById('speakBtn');if(btn)btn.textContent='🔊 Ayet ayet sesli oku (Arapça → Türkçe)';
+ document.querySelectorAll('.verse-row').forEach(el=>el.classList.remove('active'));
+}
 function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function xpToLevel(xp){return {level:1+Math.floor(xp/100),inLevel:xp%100}}
 
