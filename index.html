@@ -22,7 +22,7 @@
 .slot-row{display:flex;flex-wrap:wrap;gap:9px;margin:14px 0}
 .slot{flex:1 1 130px;min-height:56px;border:2px dashed var(--line);border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px;text-align:center;color:var(--muted);font-size:12px}
 .slot small{display:block;color:var(--muted);font-size:11px;margin-bottom:2px}
-.slot.filled{border-style:solid;border-color:#5ea979;background:#ddf3e6;color:var(--ink);font-weight:800;animation:popIn .25s ease}
+.slot.filled{border-style:solid;border-color:#5ea979;background:#ddf3e6;color:var(--ink);font-weight:800;animation:popIn .25s ease;cursor:pointer}
 .dark .slot.filled{background:#1e3a2c;border-color:#4f9f76}
 .chip-tray{display:flex;flex-wrap:wrap;gap:9px;margin:16px 0}
 .chip{border:1px solid #bddbce;background:var(--green2);color:var(--ink);border-radius:14px;padding:13px 15px;font-weight:800;cursor:pointer}
@@ -294,7 +294,7 @@ function renderStageA(task){
  let lastGroup=undefined,html='<div class="slot-row">';
  c.items.forEach((it,i)=>{
   if(it.group!==lastGroup){if(i>0)html+='</div>';if(it.group)html+=`<p class="muted" style="margin:14px 0 4px;font-weight:800;width:100%">${it.group}</p>`;html+='<div class="slot-row">';lastGroup=it.group;}
-  html+=`<div class="slot filled"><small>${i+1}</small>${sName(it.id)}</div>`;
+  html+=`<button class="slot filled" onclick="go('surah','${it.id}')"><small>${i+1}</small>${sName(it.id)}</button>`;
  });
  html+='</div>';
  app.innerHTML=`<section class="card">
@@ -322,7 +322,7 @@ function renderDrill(task){
  <div class="game-top"><span class="badge">${task.stage==='C'?'🧠 Hatırla':'🧩 Diz'} · ${studySession.idx+1}/${studySession.queue.length}</span><span class="lives">${'❤️'.repeat(drill.lives)}${'🤍'.repeat(3-drill.lives)}</span></div>
  <h2 class="surah-title">${c.icon} ${c.title}</h2>
  <p class="muted">${task.stage==='C'?'Doğru sûreleri, aralarına karışan başkalarından ayırarak sırayla seç.':'Sûreleri baştan sona doğru sırayla tıkla.'}</p>
- <div class="slot-row">${expectedIds.map((id,i)=>`<div class="slot ${i<drill.placedIdx.length?'filled':''}"><small>${i+1}</small>${i<drill.placedIdx.length?sName(drill.pool[drill.placedIdx[i]]):'?'}</div>`).join('')}</div>
+ <div class="slot-row">${expectedIds.map((id,i)=>i<drill.placedIdx.length?`<button class="slot filled" onclick="go('surah','${drill.pool[drill.placedIdx[i]]}')"><small>${i+1}</small>${sName(drill.pool[drill.placedIdx[i]])}</button>`:`<div class="slot"><small>${i+1}</small>?</div>`).join('')}</div>
  <div class="chip-tray">${drill.pool.map((id,i)=>`<button class="chip ${drill.placedIdx.includes(i)?'placed':''}" id="dchip${i}" onclick="pickDrillChip(${i})">${sName(id)}</button>`).join('')}</div>
  </section>`;
 }
@@ -363,6 +363,7 @@ function renderStudyStepResult(c,success,gained,failed){
  app.innerHTML=`<section class="card result-panel">
  <h2>${failed?'😵 Bu sefer olmadı':success?'✅ Harika!':'🙂 Tekrar gerekecek'}</h2>
  <p class="muted">${c.icon} ${c.title}</p>
+ ${failed?`<p class="muted">Doğru sıra:</p><div class="slot-row">${c.items.map((it,i)=>`<button class="slot filled" onclick="go('surah','${it.id}')"><small>${i+1}</small>${sName(it.id)}</button>`).join('')}</div>`:''}
  ${!studySession.practice&&cd?`<p>Kutu <b>${cd.box}</b>/6 · Sıradaki tekrar: <b>${fmtDate(cd.due)}</b></p>`:''}
  <p class="muted">+${gained} XP</p>
  <button class="btn" onclick="renderStudy()">Devam et →</button>
